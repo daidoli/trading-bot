@@ -9,6 +9,20 @@ import pandas as pd  # type: ignore
 import yfinance as yf  # type: ignore
 
 
+def configure_matplotlib_fonts() -> None:
+    """Prefer a CJK-capable font so Chinese labels render without warnings."""
+
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = [
+        "PingFang TC",
+        "Heiti TC",
+        "Arial Unicode MS",
+        "Noto Sans CJK TC",
+        "DejaVu Sans",
+    ]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+
+
 class MomentumStrategy(bt.Strategy):
     """Momentum strategy: buy on positive momentum, sell on negative momentum"""
 
@@ -82,6 +96,8 @@ def plot_backtest_results(data_df: pd.DataFrame, returns: float, save_to_file: b
     else:
         # Use default interactive backend for display
         pass
+
+    configure_matplotlib_fonts()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
