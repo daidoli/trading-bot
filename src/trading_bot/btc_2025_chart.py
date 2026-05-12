@@ -39,5 +39,6 @@ def main() -> None:
     prices = fetch_2025_btc_prices()
     plot_prices(prices)
 
+
 if __name__ == "__main__":
     main()

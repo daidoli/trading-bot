@@ -16,6 +16,18 @@ dependencies = [
 [tool.poetry]
 packages = [{include = "trading_bot", from = "src"}]
 
+[tool.black]
+line-length = 150
+
+[tool.isort]
+profile = "black"
+line_length = 150
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "isort (>=8.0.1,<9.0.0)"
+]

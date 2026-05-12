@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
+
 import backtrader as bt  # type: ignore
-import matplotlib.pyplot as plt
 import matplotlib
-from matplotlib.ticker import FuncFormatter
+import matplotlib.pyplot as plt
 import pandas as pd  # type: ignore
 import yfinance as yf  # type: ignore
+from matplotlib.ticker import FuncFormatter
 
 
 def configure_matplotlib_fonts() -> None:
@@ -25,13 +26,15 @@ class MomentumStrategy(bt.Strategy):
     params = (("momentum_period", 20),)
 
     def __init__(self):
+        momentum_period = self.params.momentum_period  # type: ignore
         # Calculate momentum: pt - pt-n
-        self.momentum = self.data.close - self.data.close(-self.params.momentum_period)  # type: ignore[attr-defined]
+        self.momentum = self.data.close - self.data.close(-momentum_period)
         self.order = None
 
     def next(self):
+        momentum_period = self.params.momentum_period  # type: ignore
         # Check if we have enough data
-        if len(self) < self.params.momentum_period + 1:  # type: ignore[attr-defined]
+        if len(self) < momentum_period + 1:
             return
 
         # If we have an order pending, skip
@@ -56,12 +59,14 @@ class MomentumStrategy(bt.Strategy):
             if order.isbuy():
                 print(
                     f"買入已執行，價格: {order.executed.price:.2f}, "
-                    f"成本: {order.executed.value:.2f}, 手續費: {order.executed.comm:.2f}"
+                    f"成本: {order.executed.value:.2f}, "
+                    f"手續費: {order.executed.comm:.2f}"
                 )
             else:
                 print(
                     f"賣出已執行，價格: {order.executed.price:.2f}, "
-                    f"成本: {order.executed.value:.2f}, 手續費: {order.executed.comm:.2f}"
+                    f"成本: {order.executed.value:.2f}, "
+                    f"手續費: {order.executed.comm:.2f}"
                 )
 
         self.order = None
@@ -69,18 +74,21 @@ class MomentumStrategy(bt.Strategy):
     def notify_trade(self, trade):
         if trade.isclosed:
             pnl_pct = (trade.pnl / (trade.barlen * trade.price)) * 100 if trade.price else 0
-            print(
-                f"交易已結束：利潤: {trade.pnl:.2f}, "
-                f"利潤比例: {pnl_pct:.2f}%"
-            )
+            print(f"交易已結束：利潤: {trade.pnl:.2f}, " f"利潤比例: {pnl_pct:.2f}%")
 
 
 class Main:
-    def plot_backtest_results(self, data_df: pd.DataFrame, returns: float, save_to_file: bool = False) -> None:
+    def plot_backtest_results(
+        self,
+        data_df: pd.DataFrame,
+        returns: float,
+        save_to_file: bool = False,
+    ) -> None:
         if save_to_file:
             matplotlib.use("Agg")  # Use non-interactive backend for file output
             # Create output directory if it doesn't exist
             import os
+
             os.makedirs("output", exist_ok=True)
         else:
             # Use default interactive backend for display
@@ -90,7 +98,13 @@ class Main:
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
         # Plot 1: BTC Price
-        ax1.plot(data_df.index, data_df["close"], label="BTC 收盤價", linewidth=2, color="blue")
+        ax1.plot(
+            data_df.index,
+            data_df["close"],
+            label="BTC 收盤價",
+            linewidth=2,
+            color="blue",
+        )
         ax1.set_ylabel("價格 (USD)", fontsize=12)
         ax1.set_title("BTC-USD 價格圖表 (2024-2025)", fontsize=14, fontweight="bold")
         ax1.grid(True, alpha=0.3)
@@ -102,7 +116,13 @@ class Main:
         cumulative_returns = (1 + daily_returns).cumprod()
         simulated_portfolio = 100000.0 * cumulative_returns * (returns / 100 + 1)
 
-        ax2.plot(dates, simulated_portfolio, label="投資組合價值", linewidth=2, color="green")
+        ax2.plot(
+            dates,
+            simulated_portfolio,
+            label="投資組合價值",
+            linewidth=2,
+            color="green",
+        )
         ax2.fill_between(dates, 100000.0, simulated_portfolio, alpha=0.3, color="green")
         ax2.set_ylabel("投資組合價值 (USD)", fontsize=12)
         ax2.set_xlabel("日期", fontsize=12)
@@ -191,7 +211,7 @@ class Main:
         parser.add_argument(
             "--save",
             action="store_true",
-            help="將圖表保存到文件（output/momentum_backtest_results.png），默認顯示交互式視窗"
+            help="將圖表保存到文件（output/momentum_backtest_results.png），默認顯示交互式視窗",
         )
         args = parser.parse_args()
 
