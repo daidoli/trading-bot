@@ -57,17 +57,9 @@ class MomentumStrategy(bt.Strategy):
 
         if order.status in [order.Completed]:
             if order.isbuy():
-                print(
-                    f"買入已執行，價格: {order.executed.price:.2f}, "
-                    f"成本: {order.executed.value:.2f}, "
-                    f"手續費: {order.executed.comm:.2f}"
-                )
+                print(f"買入已執行，價格: {order.executed.price:.2f}, " f"成本: {order.executed.value:.2f}, " f"手續費: {order.executed.comm:.2f}")
             else:
-                print(
-                    f"賣出已執行，價格: {order.executed.price:.2f}, "
-                    f"成本: {order.executed.value:.2f}, "
-                    f"手續費: {order.executed.comm:.2f}"
-                )
+                print(f"賣出已執行，價格: {order.executed.price:.2f}, " f"成本: {order.executed.value:.2f}, " f"手續費: {order.executed.comm:.2f}")
 
         self.order = None
 
@@ -77,77 +69,23 @@ class MomentumStrategy(bt.Strategy):
             print(f"交易已結束：利潤: {trade.pnl:.2f}, " f"利潤比例: {pnl_pct:.2f}%")
 
 
-class Main:
-    def plot_backtest_results(
-        self,
-        data_df: pd.DataFrame,
-        returns: float,
-        save_to_file: bool = False,
-    ) -> None:
-        if save_to_file:
-            matplotlib.use("Agg")  # Use non-interactive backend for file output
-            # Create output directory if it doesn't exist
-            import os
-
-            os.makedirs("output", exist_ok=True)
-        else:
-            # Use default interactive backend for display
-            pass
-
-        configure_matplotlib_fonts()
-
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
-        # Plot 1: BTC Price
-        ax1.plot(
-            data_df.index,
-            data_df["close"],
-            label="BTC 收盤價",
-            linewidth=2,
-            color="blue",
+class Runner:
+    def run(self) -> None:
+        parser = argparse.ArgumentParser(description="動量交易策略回測")
+        parser.add_argument(
+            "--save",
+            action="store_true",
+            help="將圖表保存到文件（output/momentum_backtest_results.png），默認顯示交互式視窗",
         )
-        ax1.set_ylabel("價格 (USD)", fontsize=12)
-        ax1.set_title("BTC-USD 價格圖表 (2024-2025)", fontsize=14, fontweight="bold")
-        ax1.grid(True, alpha=0.3)
-        ax1.legend(loc="upper left")
+        args = parser.parse_args()
 
-        # Plot 2: Portfolio value over time (simulated)
-        dates = data_df.index
-        daily_returns = data_df["close"].pct_change().fillna(0)
-        cumulative_returns = (1 + daily_returns).cumprod()
-        simulated_portfolio = 100000.0 * cumulative_returns * (returns / 100 + 1)
+        data_df, returns = self._run_momentum_backtest()
 
-        ax2.plot(
-            dates,
-            simulated_portfolio,
-            label="投資組合價值",
-            linewidth=2,
-            color="green",
-        )
-        ax2.fill_between(dates, 100000.0, simulated_portfolio, alpha=0.3, color="green")
-        ax2.set_ylabel("投資組合價值 (USD)", fontsize=12)
-        ax2.set_xlabel("日期", fontsize=12)
-        ax2.set_title(f"投資組合表現 (總收益: {returns:.2f}%)", fontsize=14, fontweight="bold")
-        ax2.grid(True, alpha=0.3)
-        ax2.legend(loc="upper left")
+        # Plot performance chart
+        print("\n生成性能圖表...")
+        self._plot_backtest_results(data_df, returns, save_to_file=args.save)
 
-        # Format y-axis as currency
-        ax1.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"${x:,.0f}"))
-        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"${x:,.0f}"))
-
-        plt.tight_layout()
-
-        if save_to_file:
-            # Save the plot to file
-            output_path = "output/momentum_backtest_results.png"
-            plt.savefig(output_path, dpi=150, bbox_inches="tight")
-            print(f"圖表已保存到 {output_path}")
-            plt.close()
-        else:
-            # Display the plot in interactive window
-            print("顯示圖表視窗...")
-            plt.show()
-
-    def run_momentum_backtest(self, save_to_file: bool = False):
+    def _run_momentum_backtest(self):
         # Fetch BTC data
         print("獲取 BTC-USD 數據...")
         data_df = yf.download(
@@ -202,21 +140,78 @@ class Main:
         returns = ((final_value - initial_value) / initial_value) * 100
         print(f"總收益：{returns:.2f}%")
 
-        # Plot performance chart
-        print("\n生成性能圖表...")
-        self.plot_backtest_results(data_df, returns, save_to_file=save_to_file)
+        return data_df, returns
 
-    def main(self) -> None:
-        parser = argparse.ArgumentParser(description="動量交易策略回測")
-        parser.add_argument(
-            "--save",
-            action="store_true",
-            help="將圖表保存到文件（output/momentum_backtest_results.png），默認顯示交互式視窗",
+    def _plot_backtest_results(
+        self,
+        data_df: pd.DataFrame,
+        returns: float,
+        save_to_file: bool = False,
+    ) -> None:
+        if save_to_file:
+            matplotlib.use("Agg")  # Use non-interactive backend for file output
+            # Create output directory if it doesn't exist
+            import os
+
+            os.makedirs("output", exist_ok=True)
+        else:
+            # Use default interactive backend for display
+            pass
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
+        # Plot 1: BTC Price
+        ax1.plot(
+            data_df.index,
+            data_df["close"],
+            label="BTC 收盤價",
+            linewidth=2,
+            color="blue",
         )
-        args = parser.parse_args()
+        ax1.set_ylabel("價格 (USD)", fontsize=12)
+        ax1.set_title("BTC-USD 價格圖表 (2024-2025)", fontsize=14, fontweight="bold")
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc="upper left")
 
-        self.run_momentum_backtest(save_to_file=args.save)
+        # Plot 2: Portfolio value over time (simulated)
+        dates = data_df.index
+        daily_returns = data_df["close"].pct_change().fillna(0)
+        cumulative_returns = (1 + daily_returns).cumprod()
+        simulated_portfolio = 100000.0 * cumulative_returns * (returns / 100 + 1)
+
+        ax2.plot(
+            dates,
+            simulated_portfolio,
+            label="投資組合價值",
+            linewidth=2,
+            color="green",
+        )
+        ax2.fill_between(dates, 100000.0, simulated_portfolio, alpha=0.3, color="green")
+        ax2.set_ylabel("投資組合價值 (USD)", fontsize=12)
+        ax2.set_xlabel("日期", fontsize=12)
+        ax2.set_title(f"投資組合表現 (總收益: {returns:.2f}%)", fontsize=14, fontweight="bold")
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc="upper left")
+
+        # Format y-axis as currency
+        ax1.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"${x:,.0f}"))
+        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"${x:,.0f}"))
+
+        plt.tight_layout()
+
+        if save_to_file:
+            # Save the plot to file
+            output_path = "output/momentum_backtest_results.png"
+            plt.savefig(output_path, dpi=150, bbox_inches="tight")
+            print(f"圖表已保存到 {output_path}")
+            plt.close()
+        else:
+            # Display the plot in interactive window
+            print("顯示圖表視窗...")
+            plt.show()
 
 
 if __name__ == "__main__":
-    Main().main()
+    configure_matplotlib_fonts()
+
+    runner = Runner()
+    runner.run()
