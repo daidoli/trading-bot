@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import backtrader as bt  # type: ignore
 import matplotlib
@@ -77,17 +78,54 @@ class Runner:
             action="store_true",
             help="將圖表保存到文件（output/momentum_backtest_results.png），默認顯示交互式視窗",
         )
+        parser.add_argument(
+            "--refresh-cache",
+            action="store_true",
+            help="忽略本機快取並重新下載 BTC-USD 數據",
+        )
         args = parser.parse_args()
 
-        data_df, returns = self._run_momentum_backtest()
+        price_data = self._load_price_data(refresh_cache=args.refresh_cache)
+        price_data, returns = self._backtest(price_data)
 
         # Plot performance chart
         print("\n生成性能圖表...")
-        self._plot_backtest_results(data_df, returns, save_to_file=args.save)
+        self._plot_backtest_results(price_data, returns, save_to_file=args.save)
 
-    def _run_momentum_backtest(self):
-        # Fetch BTC data
-        print("獲取 BTC-USD 數據...")
+    def _backtest(self, price_df: pd.DataFrame) -> tuple[pd.DataFrame, float]:
+        price_df.index.name = "datetime"
+        price_pd = bt.feeds.PandasData(dataname=price_df)  # pyright: ignore[reportCallIssue]
+
+        initial_value = 100000.0
+
+        cerebro = bt.Cerebro()
+        cerebro.addstrategy(MomentumStrategy, momentum_period=20)
+        cerebro.adddata(price_pd)
+        cerebro.broker.setcash(initial_value)
+        cerebro.broker.setcommission(commission=0.001)
+        cerebro.run()
+
+        final_value = cerebro.broker.getvalue()
+        returns = ((final_value - initial_value) / initial_value) * 100
+
+        print(f"初始投資組合價值：{initial_value:.2f}")
+        print(f"最終投資組合價值：{final_value:.2f}")
+        print(f"總收益：{returns:.2f}%")
+
+        return price_df, returns
+
+    def _load_price_data(self, refresh_cache: bool = False) -> pd.DataFrame:
+        cache_dir = Path("output/cache")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "btc-usd_2024-01-01_2025-12-31_1d.csv"
+
+        if cache_file.exists() and not refresh_cache:
+            print(f"讀取本機快取：{cache_file}")
+            cached_df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+            cached_df.index.name = "datetime"
+            return cached_df
+
+        print("從 yfinance 下載最新數據...")
         data_df = yf.download(
             "BTC-USD",
             start="2024-01-01",
@@ -100,47 +138,15 @@ class Runner:
         if data_df is None or data_df.empty:
             raise ValueError("未返回 BTC 價格數據。")
 
-        # Flatten the multi-level columns from yfinance
         if isinstance(data_df.columns, pd.MultiIndex):
             data_df.columns = [col[0] for col in data_df.columns]
 
-        # Rename columns to match backtrader expectations
         data_df.columns = [col.lower() for col in data_df.columns]
         data_df = data_df[["open", "high", "low", "close", "volume"]]
-
-        # Create cerebro engine
-        cerebro = bt.Cerebro()
-
-        # Add strategy
-        cerebro.addstrategy(MomentumStrategy, momentum_period=20)
-
-        # Prepare data
         data_df.index.name = "datetime"
-
-        # Use PandasData
-        data = bt.feeds.PandasData(dataname=data_df)  # type: ignore
-        cerebro.adddata(data)
-
-        # Set broker cash
-        cerebro.broker.setcash(100000.0)
-
-        # Add commission
-        cerebro.broker.setcommission(commission=0.001)
-
-        print(f"初始投資組合價值：{cerebro.broker.getvalue():.2f}")
-
-        # Run backtest
-        cerebro.run()
-
-        print(f"最終投資組合價值：{cerebro.broker.getvalue():.2f}")
-
-        # Calculate returns
-        final_value = cerebro.broker.getvalue()
-        initial_value = 100000.0
-        returns = ((final_value - initial_value) / initial_value) * 100
-        print(f"總收益：{returns:.2f}%")
-
-        return data_df, returns
+        data_df.to_csv(cache_file)
+        print(f"已寫入快取：{cache_file}")
+        return data_df
 
     def _plot_backtest_results(
         self,
