@@ -49,6 +49,7 @@ class Strategy(bt.Strategy):
         # Calculate momentum: pt - pt-n
         self.momentum = self.data.close - self.data.close(-momentum_period)
         self.order = None
+        self.daily_values = []
 
     def next(self):
         momentum_period = self.params.momentum_period  # type: ignore
@@ -62,13 +63,13 @@ class Strategy(bt.Strategy):
 
         # If not in position
         if not self.position:
-            # Buy if momentum is positive (uptrend)
             if self.momentum[0] > 0:
                 self.order = self.buy()
         else:
-            # Sell if momentum is negative (downtrend)
             if self.momentum[0] < 0:
                 self.order = self.sell()
+
+        self.daily_values.append(self.broker.getvalue())
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -132,6 +133,9 @@ class Backtester:
     ) -> None:
         self._args = args
         self._data_manager = data_manager
+        self._initial_value = 100000.0
+        self._momentum_period = 30
+        self._commission = 0.001
 
     def run(self) -> None:
         price_data = self._data_manager.load_price_data(refresh_cache=self._args.refresh_cache)
@@ -144,19 +148,17 @@ class Backtester:
         price_df.index.name = "datetime"
         price_pd = bt.feeds.PandasData(dataname=price_df)  # pyright: ignore[reportCallIssue]
 
-        initial_value = 100000.0
-
         cerebro = bt.Cerebro()
-        cerebro.addstrategy(Strategy, momentum_period=20)
+        cerebro.addstrategy(Strategy, momentum_period=self._momentum_period)
         cerebro.adddata(price_pd)
-        cerebro.broker.setcash(initial_value)
-        cerebro.broker.setcommission(0.001)
+        cerebro.broker.setcash(self._initial_value)
+        cerebro.broker.setcommission(self._commission)
         cerebro.run()
 
         final_value = cerebro.broker.getvalue()
-        returns = ((final_value - initial_value) / initial_value) * 100
+        returns = ((final_value - self._initial_value) / self._initial_value) * 100
 
-        print(f"初始投資組合價值：{initial_value:.2f}")
+        print(f"初始投資組合價值：{self._initial_value:.2f}")
         print(f"最終投資組合價值：{final_value:.2f}")
         print(f"總收益：{returns:.2f}%")
 
