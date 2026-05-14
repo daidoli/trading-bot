@@ -11,6 +11,8 @@ class Strategy(bt.Strategy):
         ("macd_signal", 9),
         ("rsi_short_period", 6),
         ("rsi_long_period", 14),
+        ("rsi_overbought", 75),
+        ("rsi_oversold", 25),
     )
 
     def __init__(self):
@@ -31,6 +33,8 @@ class Strategy(bt.Strategy):
             period=self.params.rsi_long_period,  # type: ignore
         )
         self.rsi_crossover = bt.indicators.CrossOver(self.rsi_short, self.rsi_long)  # type: ignore
+        self.rsi_overbought_indicator = self.rsi_long > self.params.rsi_overbought  # type: ignore
+        self.rsi_oversold_indicator = self.rsi_long < self.params.rsi_oversold  # type: ignore
         self.order = None
         self.daily_values = []
 
@@ -38,9 +42,25 @@ class Strategy(bt.Strategy):
         momentum_period = self.params.momentum_period  # type: ignore
         rsi_short_period = self.params.rsi_short_period  # type: ignore
         rsi_long_period = self.params.rsi_long_period  # type: ignore
+        rsi_overbought = float(self.params.rsi_overbought)  # type: ignore
+        rsi_oversold = float(self.params.rsi_oversold)  # type: ignore
         # Check if we have enough data
         if len(self) < max(momentum_period + 1, rsi_short_period, rsi_long_period) + 1:
             return
+
+        rsi_now = float(self.rsi_long[0])
+        rsi_prev = float(self.rsi_long[-1])
+        close_now = float(self.data.close[0])
+        market_volume = float(self.data.volume[0])
+        if rsi_prev <= rsi_overbought and self.rsi_overbought_indicator[0]:
+            print(
+                f"[{self.data.datetime.date(0)}] RSI 超過 {rsi_overbought:.0f}: {rsi_now:.2f}, "
+                f"價格: {close_now:.2f}, 市場總量: {market_volume:.6f}"
+            )
+        elif rsi_prev >= rsi_oversold and self.rsi_oversold_indicator[0]:
+            print(
+                f"[{self.data.datetime.date(0)}] RSI 低於 {rsi_oversold:.0f}: {rsi_now:.2f}, " f"價格: {close_now:.2f}, 市場總量: {market_volume:.6f}"
+            )
 
         # If we have an order pending, skip
         if self.order:
@@ -64,9 +84,19 @@ class Strategy(bt.Strategy):
 
         if order.status in [order.Completed]:
             if order.isbuy():
-                print(f"買入已執行，價格: {order.executed.price:.2f}, " f"成本: {order.executed.value:.2f}, " f"手續費: {order.executed.comm:.2f}")
+                print(
+                    f"買入已執行，價格: {order.executed.price:.2f}, "
+                    f"數量: {order.executed.size:.6f}, "
+                    f"成本: {order.executed.value:.2f}, "
+                    f"手續費: {order.executed.comm:.2f}"
+                )
             else:
-                print(f"賣出已執行，價格: {order.executed.price:.2f}, " f"成本: {order.executed.value:.2f}, " f"手續費: {order.executed.comm:.2f}")
+                print(
+                    f"賣出已執行，價格: {order.executed.price:.2f}, "
+                    f"數量: {order.executed.size:.6f}, "
+                    f"成本: {order.executed.value:.2f}, "
+                    f"手續費: {order.executed.comm:.2f}"
+                )
 
         self.order = None
 
