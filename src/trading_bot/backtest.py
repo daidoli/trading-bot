@@ -23,7 +23,7 @@ def configure_matplotlib_fonts() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="動量交易策略回測")
+    parser = argparse.ArgumentParser(description="動量 + MACD 交易策略回測")
     parser.add_argument(
         "--plot",
         action="store_true",

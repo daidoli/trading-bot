@@ -4,12 +4,22 @@ import backtrader as bt  # type: ignore
 
 
 class Strategy(bt.Strategy):
-    params = (("momentum_period", 20),)
+    params = (
+        ("momentum_period", 20),
+        ("macd_fast", 12),
+        ("macd_slow", 26),
+        ("macd_signal", 9),
+    )
 
     def __init__(self):
         momentum_period = self.params.momentum_period  # type: ignore
         # Calculate momentum: pt - pt-n
         self.momentum = self.data.close - self.data.close(-momentum_period)
+        self.macd = bt.indicators.MACD(
+            period_me1=self.params.macd_fast,  # type: ignore
+            period_me2=self.params.macd_slow,  # type: ignore
+            period_signal=self.params.macd_signal,  # type: ignore
+        )
         self.order = None
         self.daily_values = []
 
@@ -25,10 +35,10 @@ class Strategy(bt.Strategy):
 
         # If not in position
         if not self.position:
-            if self.momentum[0] > 0:
+            if self.momentum[0] > 0 and self.macd.macd[0] > self.macd.signal[0]:
                 self.order = self.buy()
         else:
-            if self.momentum[0] < 0:
+            if self.momentum[0] < 0 and self.macd.macd[0] < self.macd.signal[0]:
                 self.order = self.sell()
 
         self.daily_values.append(self.broker.getvalue())
