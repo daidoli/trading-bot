@@ -51,7 +51,6 @@ class Backtester:
         self._args = args
         self._data_manager = data_manager
         self._initial_value = 100000.0
-        self._momentum_period = 30
         self._commission = 0.001
 
     def run(self) -> None:
@@ -66,7 +65,7 @@ class Backtester:
         price_pd = bt.feeds.PandasData(dataname=price_df)  # pyright: ignore[reportCallIssue]
 
         cerebro = bt.Cerebro()
-        cerebro.addstrategy(Strategy, momentum_period=self._momentum_period)
+        cerebro.addstrategy(Strategy)
         cerebro.adddata(price_pd)
         cerebro.broker.setcash(self._initial_value)
         cerebro.broker.setcommission(self._commission)

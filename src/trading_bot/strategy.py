@@ -9,6 +9,8 @@ class Strategy(bt.Strategy):
         ("macd_fast", 12),
         ("macd_slow", 26),
         ("macd_signal", 9),
+        ("rsi_short_period", 6),
+        ("rsi_long_period", 14),
     )
 
     def __init__(self):
@@ -20,13 +22,24 @@ class Strategy(bt.Strategy):
             period_me2=self.params.macd_slow,  # type: ignore
             period_signal=self.params.macd_signal,  # type: ignore
         )
+        self.rsi_short = bt.indicators.RSI(
+            self.data.close,
+            period=self.params.rsi_short_period,  # type: ignore
+        )
+        self.rsi_long = bt.indicators.RSI(
+            self.data.close,
+            period=self.params.rsi_long_period,  # type: ignore
+        )
+        self.rsi_crossover = bt.indicators.CrossOver(self.rsi_short, self.rsi_long)  # type: ignore
         self.order = None
         self.daily_values = []
 
     def next(self):
         momentum_period = self.params.momentum_period  # type: ignore
+        rsi_short_period = self.params.rsi_short_period  # type: ignore
+        rsi_long_period = self.params.rsi_long_period  # type: ignore
         # Check if we have enough data
-        if len(self) < momentum_period + 1:
+        if len(self) < max(momentum_period + 1, rsi_short_period, rsi_long_period) + 1:
             return
 
         # If we have an order pending, skip
@@ -35,10 +48,12 @@ class Strategy(bt.Strategy):
 
         # If not in position
         if not self.position:
-            if self.momentum[0] > 0 and self.macd.macd[0] > self.macd.signal[0]:
+            # 多策略共振買進：動能 + MACD + RSI 黃金交叉
+            if self.momentum[0] > 0 and self.macd.macd[0] > self.macd.signal[0] and self.rsi_crossover[0] > 0:
                 self.order = self.buy()
         else:
-            if self.momentum[0] < 0 and self.macd.macd[0] < self.macd.signal[0]:
+            # 多策略共振賣出：動能 + MACD + RSI 死亡交叉
+            if self.momentum[0] < 0 and self.macd.macd[0] < self.macd.signal[0] and self.rsi_crossover[0] < 0:
                 self.order = self.sell()
 
         self.daily_values.append(self.broker.getvalue())
