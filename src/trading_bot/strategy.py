@@ -6,6 +6,8 @@ import backtrader as bt  # type: ignore
 class Strategy(bt.Strategy):
     params = (
         ("momentum_period", 20),
+        ("zscore_period", 20),
+        ("zscore_threshold", 3.0),
         ("macd_fast", 12),
         ("macd_slow", 26),
         ("macd_signal", 9),
@@ -17,8 +19,13 @@ class Strategy(bt.Strategy):
 
     def __init__(self):
         momentum_period = self.params.momentum_period  # type: ignore
+        zscore_period = self.params.zscore_period  # type: ignore
         # Calculate momentum: pt - pt-n
         self.momentum = self.data.close - self.data.close(-momentum_period)
+        self.close_sma = bt.indicators.SimpleMovingAverage(  # pyright: ignore[reportAttributeAccessIssue, reportCallIssue]
+            self.data.close, period=zscore_period
+        )
+        self.close_std = bt.indicators.StandardDeviation(self.data.close, period=zscore_period)  # pyright: ignore[reportCallIssue]
         self.macd = bt.indicators.MACD(
             period_me1=self.params.macd_fast,  # type: ignore
             period_me2=self.params.macd_slow,  # type: ignore
@@ -40,18 +47,30 @@ class Strategy(bt.Strategy):
 
     def next(self):
         momentum_period = self.params.momentum_period  # type: ignore
+        zscore_period = self.params.zscore_period  # type: ignore
+        zscore_threshold = float(self.params.zscore_threshold)  # type: ignore
         rsi_short_period = self.params.rsi_short_period  # type: ignore
         rsi_long_period = self.params.rsi_long_period  # type: ignore
         rsi_overbought = float(self.params.rsi_overbought)  # type: ignore
         rsi_oversold = float(self.params.rsi_oversold)  # type: ignore
         # Check if we have enough data
-        if len(self) < max(momentum_period + 1, rsi_short_period, rsi_long_period) + 1:
+        if len(self) < max(momentum_period + 1, zscore_period, rsi_short_period, rsi_long_period) + 1:
             return
 
         rsi_now = float(self.rsi_long[0])
         rsi_prev = float(self.rsi_long[-1])
         close_now = float(self.data.close[0])
         market_volume = float(self.data.volume[0])
+        close_std_now = float(self.close_std[0])
+
+        if close_std_now > 0:
+            zscore = (close_now - float(self.close_sma[0])) / close_std_now
+            if abs(zscore) > zscore_threshold:
+                print(
+                    f"[{self.data.datetime.date(0)}] Z-Score 超過閾值 {zscore_threshold:.1f}: {zscore:.2f}, "
+                    f"價格: {close_now:.2f}, 市場總量: {market_volume:.6f}"
+                )
+
         if rsi_prev <= rsi_overbought and self.rsi_overbought_indicator[0]:
             print(
                 f"[{self.data.datetime.date(0)}] RSI 超過 {rsi_overbought:.0f}: {rsi_now:.2f}, "
