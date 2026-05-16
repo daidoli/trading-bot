@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import backtrader as bt  # type: ignore
 
 
@@ -7,7 +9,7 @@ class Strategy(bt.Strategy):
     params = (
         ("momentum_period", 20),
         ("zscore_period", 20),
-        ("zscore_threshold", 3.0),
+        ("zscore_threshold", 2.5),
         ("macd_fast", 12),
         ("macd_slow", 26),
         ("macd_signal", 9),
@@ -97,29 +99,74 @@ class Strategy(bt.Strategy):
 
         self.daily_values.append(self.broker.getvalue())
 
+    def _calculate_risk_metrics(self) -> tuple[float | None, float | None]:
+        values = list(self.daily_values)
+        current_value = float(self.broker.getvalue())
+        if not values or values[-1] != current_value:
+            values.append(current_value)
+
+        if len(values) < 2:
+            return None, None
+
+        returns = []
+        for prev, curr in zip(values[:-1], values[1:]):
+            if prev == 0:
+                continue
+            returns.append((curr / prev) - 1.0)
+
+        if len(returns) < 2:
+            return None, None
+
+        avg_return = sum(returns) / len(returns)
+        variance = sum((ret - avg_return) ** 2 for ret in returns) / (len(returns) - 1)
+        std_dev = math.sqrt(variance)
+
+        sharpe_ratio = None
+        if std_dev > 0:
+            sharpe_ratio = (avg_return / std_dev) * math.sqrt(252)
+
+        downside_returns = [ret for ret in returns if ret < 0]
+        sortino_ratio = None
+        if len(downside_returns) > 1:
+            downside_mean = sum(downside_returns) / len(downside_returns)
+            downside_variance = sum((ret - downside_mean) ** 2 for ret in downside_returns) / (len(downside_returns) - 1)
+            downside_std_dev = math.sqrt(downside_variance)
+            if downside_std_dev > 0:
+                sortino_ratio = (avg_return / downside_std_dev) * math.sqrt(252)
+
+        return sharpe_ratio, sortino_ratio
+
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
             return
 
         if order.status in [order.Completed]:
+            sharpe_ratio, sortino_ratio = self._calculate_risk_metrics()
+            sharpe_text = f"{sharpe_ratio:.2f}" if sharpe_ratio is not None else "N/A"
+            sortino_text = f"{sortino_ratio:.2f}" if sortino_ratio is not None else "N/A"
             if order.isbuy():
                 print(
                     f"買入已執行，價格: {order.executed.price:.2f}, "
                     f"數量: {order.executed.size:.6f}, "
                     f"成本: {order.executed.value:.2f}, "
-                    f"手續費: {order.executed.comm:.2f}"
+                    f"手續費: {order.executed.comm:.2f}, "
+                    f"夏普指數: {sharpe_text}, 索提諾指數: {sortino_text}"
                 )
             else:
                 print(
                     f"賣出已執行，價格: {order.executed.price:.2f}, "
                     f"數量: {order.executed.size:.6f}, "
                     f"成本: {order.executed.value:.2f}, "
-                    f"手續費: {order.executed.comm:.2f}"
+                    f"手續費: {order.executed.comm:.2f}, "
+                    f"夏普指數: {sharpe_text}, 索提諾指數: {sortino_text}"
                 )
 
         self.order = None
 
     def notify_trade(self, trade):
         if trade.isclosed:
+            sharpe_ratio, sortino_ratio = self._calculate_risk_metrics()
+            sharpe_text = f"{sharpe_ratio:.2f}" if sharpe_ratio is not None else "N/A"
+            sortino_text = f"{sortino_ratio:.2f}" if sortino_ratio is not None else "N/A"
             pnl_pct = (trade.pnl / (trade.barlen * trade.price)) * 100 if trade.price else 0
-            print(f"交易已結束：利潤: {trade.pnl:.2f}, " f"利潤比例: {pnl_pct:.2f}%")
+            print(f"交易已結束：利潤: {trade.pnl:.2f}, " f"利潤比例: {pnl_pct:.2f}%, " f"夏普指數: {sharpe_text}, 索提諾指數: {sortino_text}")
